@@ -1,11 +1,11 @@
 package org.example;
 
+import org.mindrot.jbcrypt.BCrypt;
 import java.sql.*;
 
 public class DatabaseHandler {
     private static final String DB_URL = "jdbc:sqlite:users.db";
 
-    // Static block to initialize database table without requiring a main method
     static {
         try (Connection conn = DriverManager.getConnection(DB_URL);
              Statement stmt = conn.createStatement()) {
@@ -37,13 +37,14 @@ public class DatabaseHandler {
     }
 
     public void insertUser(String name, String email, String password) {
+        String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt()); // 🔐 Hashing password
         String sql = "INSERT INTO users(name, email, password) VALUES(?,?,?)";
         try (Connection conn = DriverManager.getConnection(DB_URL);
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setString(1, name);
             pstmt.setString(2, email);
-            pstmt.setString(3, password);
+            pstmt.setString(3, hashedPassword);
             pstmt.executeUpdate();
             System.out.println("User inserted successfully.");
         } catch (SQLException e) {
@@ -59,10 +60,13 @@ public class DatabaseHandler {
             pstmt.setString(1, email);
             ResultSet rs = pstmt.executeQuery();
 
-            return rs.next() && rs.getString("password").equals(password);
+            if (rs.next()) {
+                String storedHash = rs.getString("password");
+                return BCrypt.checkpw(password, storedHash); // ✅ Check bcrypt hash
+            }
         } catch (SQLException e) {
             System.out.println("Error validating user: " + e.getMessage());
-            return false;
         }
+        return false;
     }
 }
